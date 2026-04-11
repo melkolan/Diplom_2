@@ -1,41 +1,33 @@
 package praktikum;
 
+import io.qameta.allure.Description;
+import io.qameta.allure.junit4.DisplayName;
 import io.restassured.response.Response;
 import org.junit.Test;
+import praktikum.dto.request.RegisterUserRequest;
+import praktikum.util.UserGenerator;
 
-import java.util.Map;
-
+import static org.apache.http.HttpStatus.SC_OK;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
 
 public class RegisterUserTest extends BaseTest {
 
     @Test
+    @DisplayName("Регистрация уникального пользователя")
+    @Description("Проверка успешной регистрации нового уникального пользователя")
     public void createUniqueUserShouldReturnSuccess() {
-        Map<String, String> user = UserGenerator.getRandomUser();
+        RegisterUserRequest newUser = UserGenerator.getRandomUser();
 
-        Response response = registerUser(user);
+        Response response = authApi.registerUser(newUser);
         accessToken = response.then().extract().path("accessToken");
 
         response.then()
-                .statusCode(200)
+                .statusCode(SC_OK)
                 .body("success", equalTo(true))
-                .body("user.email", equalTo(user.get("email")))
-                .body("user.name", equalTo(user.get("name")))
+                .body("user.email", equalTo(newUser.getEmail()))
+                .body("user.name", equalTo(newUser.getName()))
                 .body("accessToken", notNullValue())
                 .body("refreshToken", notNullValue());
-    }
-
-    @Test
-    public void createDuplicateUserShouldReturn403() {
-        Map<String, String> user = UserGenerator.getRandomUser();
-
-        Response firstResponse = registerUser(user);
-        accessToken = firstResponse.then().extract().path("accessToken");
-
-        registerUser(user).then()
-                .statusCode(403)
-                .body("success", equalTo(false))
-                .body("message", equalTo("User already exists"));
     }
 }

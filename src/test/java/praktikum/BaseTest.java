@@ -1,25 +1,32 @@
 package praktikum;
 
-import io.qameta.allure.Step;
 import io.qameta.allure.restassured.AllureRestAssured;
 import io.restassured.RestAssured;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.http.ContentType;
-import io.restassured.response.Response;
 import io.restassured.specification.RequestSpecification;
 import org.junit.After;
 import org.junit.Before;
+import praktikum.api.AuthApi;
+import praktikum.api.IngredientsApi;
+import praktikum.api.OrdersApi;
+import praktikum.api.UserApi;
+import praktikum.dto.request.LoginUserRequest;
+import praktikum.dto.request.OrderRequest;
+import praktikum.dto.request.RegisterUserRequest;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
-import static io.restassured.RestAssured.given;
+import static org.apache.http.HttpStatus.SC_OK;
 
 public abstract class BaseTest {
 
     protected RequestSpecification requestSpec;
+    protected AuthApi authApi;
+    protected UserApi userApi;
+    protected IngredientsApi ingredientsApi;
+    protected OrdersApi ordersApi;
     protected String accessToken;
 
     @Before
@@ -31,54 +38,39 @@ public abstract class BaseTest {
                 .setContentType(ContentType.JSON)
                 .addFilter(new AllureRestAssured())
                 .build();
+
+        authApi = new AuthApi(requestSpec);
+        userApi = new UserApi(requestSpec);
+        ingredientsApi = new IngredientsApi(requestSpec);
+        ordersApi = new OrdersApi(requestSpec);
     }
 
     @After
     public void tearDown() {
         if (accessToken != null) {
-            deleteUser(accessToken);
+            userApi.deleteUser(accessToken);
         }
     }
 
-    @Step("Создать пользователя")
-    protected Response registerUser(Map<String, String> userData) {
-        return given()
-                .spec(requestSpec)
-                .body(userData)
-                .when()
-                .post("/auth/register");
-    }
-
-    @Step("Логин пользователя")
-    protected Response loginUser(String email, String password) {
-        Map<String, String> body = new HashMap<>();
-        body.put("email", email);
-        body.put("password", password);
-
-        return given()
-                .spec(requestSpec)
-                .body(body)
-                .when()
-                .post("/auth/login");
-    }
-
-    @Step("Удалить пользователя")
-    protected Response deleteUser(String token) {
-        return given()
-                .spec(requestSpec)
-                .header("Authorization", token)
-                .when()
-                .delete("/auth/user");
-    }
-
-    @Step("Получить id ингредиентов")
-    protected List<String> getIngredientIds(int count) {
-        List<String> allIds = given()
-                .spec(requestSpec)
-                .when()
-                .get("/ingredients")
+    protected void registerAndAuthorizeUser(RegisterUserRequest user) {
+        accessToken = authApi.registerUser(user)
                 .then()
-                .statusCode(200)
+                .extract()
+                .path("accessToken");
+    }
+
+    protected LoginUserRequest buildLoginRequest(String email, String password) {
+        return new LoginUserRequest(email, password);
+    }
+
+    protected OrderRequest buildOrderRequest(List<String> ingredientIds) {
+        return new OrderRequest(ingredientIds);
+    }
+
+    protected List<String> getIngredientIds(int count) {
+        List<String> allIds = ingredientsApi.getIngredients()
+                .then()
+                .statusCode(SC_OK)
                 .extract()
                 .jsonPath()
                 .getList("data._id");
@@ -88,30 +80,5 @@ public abstract class BaseTest {
         }
 
         return new ArrayList<>(allIds.subList(0, count));
-    }
-
-    @Step("Создать заказ без авторизации")
-    protected Response createOrder(List<String> ingredientIds) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("ingredients", ingredientIds);
-
-        return given()
-                .spec(requestSpec)
-                .body(body)
-                .when()
-                .post("/orders");
-    }
-
-    @Step("Создать заказ с авторизацией")
-    protected Response createOrderAuthorized(List<String> ingredientIds, String token) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("ingredients", ingredientIds);
-
-        return given()
-                .spec(requestSpec)
-                .header("Authorization", token)
-                .body(body)
-                .when()
-                .post("/orders");
     }
 }
